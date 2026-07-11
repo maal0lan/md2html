@@ -127,7 +127,7 @@ const pythonPath = String(result)
 			outputPath = path.join(basePath, custom, activeFile.basename + '.html');
 		}
 
-		const configDir = (this.app.vault as { configDir?: string }).configDir ?? '.obsidian';
+		const configDir = this.app.vault.configDir;
 		const scriptPath = path.join(
 			basePath,
 			configDir,
@@ -143,7 +143,7 @@ const pythonPath = String(result)
 		console.debug('OUTPUT:', outputPath);
 		
 		if (!fs.existsSync(scriptPath)) {
-			new Notice('Md2html.py not found');
+			new Notice('md2html.py not found');
 			return;
 		}
 
@@ -155,7 +155,7 @@ const pythonPath = String(result)
 		const pythonPath = this.findPython();
 		if (!pythonPath) {
 			new Notice('Python not found');
-			new Notice('Please install Python');
+			new Notice('Please install python');
 			return;
 		}
 
@@ -175,7 +175,7 @@ const pythonPath = String(result)
 					console.error('EXEC ERROR:', error);
 					console.debug('STDOUT:', stdout);
 					console.debug('STDERR:', stderr);
-					new Notice('Conversion failed pip install markdown2');
+					new Notice('Conversion failed. Run: pip install markdown2');
 					return;
 				}
 
