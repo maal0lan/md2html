@@ -1,35 +1,7 @@
-import { Notice, Plugin } from 'obsidian';
+import { Notice, Plugin, normalizePath } from 'obsidian';
 import { ExportSettingTab } from './settings.js';
 import { loadExportSettings, saveExportSettings, ExportSettings } from './utils.js';
-
-interface NodePath {
-	join(...paths: string[]): string;
-	isAbsolute(path: string): boolean;
-	dirname(path: string): string;
-}
-
-type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void;
-
-interface ChildProcessModule {
-	execFile(command: string, args: string[], options: { windowsHide: boolean }, callback: ExecFileCallback): void;
-	execSync(command: string, options: { encoding: string }): string;
-}
-
-interface FsModule {
-	existsSync(path: string): boolean;
-	mkdirSync(path: string, options: { recursive: boolean }): void;
-}
-
-interface WindowWithRequire extends Window {
-	require(module: 'path'): NodePath;
-	require(module: 'child_process'): ChildProcessModule;
-	require(module: 'fs'): FsModule;
-	require(module: 'process'): { platform: string };
-}
-
-const windowWithRequire = window as unknown as WindowWithRequire;
-const path = windowWithRequire.require('path');
-const { execFile, execSync } = windowWithRequire.require('child_process');
+import { buildHtmlDocument } from './markdown.js';
 
 export default class Md2HtmlPlugin extends Plugin {
 	settings!: ExportSettings;
@@ -67,38 +39,6 @@ export default class Md2HtmlPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	// 🔥 FIXED Python finder
-	private findPython(): string {
-		const commands = ['python', 'python3', 'py'];
-		const processModule = windowWithRequire.require('process');
-
-		for (const cmd of commands) {
-			try {
-				const result = processModule.platform === 'win32'
-					? execSync(`where ${cmd}`, { encoding: 'utf8' })
-					: execSync(`which ${cmd}`, { encoding: 'utf8' });
-
-				if (typeof result !== 'string') {
-  return '';
-}
-
-const pythonPath = String(result)
-  .split(/\r?\n/)
-  .find(line => line.trim().length > 0)
-  ?.trim() ?? '';
-
-				if (pythonPath) {
-					console.debug('Found Python:', pythonPath);
-					return pythonPath;
-				}
-			} catch {
-				// ignore missing Python executable
-			}
-		}
-
-		return '';
-	}
-
 	private async convertActiveFile() {
 		const activeFile = this.app.workspace.getActiveFile();
 
@@ -107,81 +47,42 @@ const pythonPath = String(result)
 			return;
 		}
 
-		const settings = await loadExportSettings(this);
+		const mdContent = await this.app.vault.read(activeFile);
+		const htmlOutput = buildHtmlDocument(mdContent, this.settings.exportTheme || 'light', activeFile.basename);
 
-		const basePath = (this.app.vault.adapter as unknown as { getBasePath: () => string }).getBasePath();
-		const inputPath = path.join(basePath, activeFile.path);
+		// Work out the destination folder (vault-relative).
+		const customFolder = (this.settings.exportPath || '').trim();
+		const parentPath = activeFile.parent ? activeFile.parent.path : '';
+		const destFolder = customFolder ? customFolder : parentPath;
+		const destFolderNormalized = normalizePath(destFolder || '/');
 
-		let outputPath: string;
-		const custom = settings.exportPath.trim();
-
-		if (!custom) {
-			outputPath = path.join(
-				basePath,
-				activeFile.parent?.path || '',
-				activeFile.basename + '.html'
-			);
-		} else if (path.isAbsolute(custom)) {
-			outputPath = path.join(custom, activeFile.basename + '.html');
-		} else {
-			outputPath = path.join(basePath, custom, activeFile.basename + '.html');
+		if (
+			destFolderNormalized &&
+			destFolderNormalized !== '/' &&
+			!(await this.app.vault.adapter.exists(destFolderNormalized))
+		) {
+			await this.app.vault.createFolder(destFolderNormalized).catch(() => {
+				// Folder may already exist due to a race; ignore.
+			});
 		}
 
-		const configDir = this.app.vault.configDir;
-		const scriptPath = path.join(
-			basePath,
-			configDir,
-			'plugins',
-			this.manifest.id,
-			'md2html.py'
+		const outputPath = normalizePath(
+			destFolderNormalized && destFolderNormalized !== '/'
+				? `${destFolderNormalized}/${activeFile.basename}.html`
+				: `${activeFile.basename}.html`
 		);
 
-		const fs = windowWithRequire.require('fs');
-
-		console.debug('SCRIPT:', scriptPath);
-		console.debug('INPUT:', inputPath);
-		console.debug('OUTPUT:', outputPath);
-		
-		if (!fs.existsSync(scriptPath)) {
-			new Notice('md2html.py not found');
-			return;
-		}
-
-		const outputDir = path.dirname(outputPath);
-		if (!fs.existsSync(outputDir)) {
-			fs.mkdirSync(outputDir, { recursive: true });
-		}
-
-		const pythonPath = this.findPython();
-		if (!pythonPath) {
-			new Notice('Python not found');
-			new Notice('Please install python');
-			return;
-		}
-
-		execFile(
-			pythonPath,
-			[
-				scriptPath,
-				inputPath,
-				'-o',
-				outputPath,
-				'-t',
-				this.settings.exportTheme || 'light'
-			],
-			{ windowsHide: true },
-			(error: Error | null, stdout: string, stderr: string) => {
-				if (error) {
-					console.error('EXEC ERROR:', error);
-					console.debug('STDOUT:', stdout);
-					console.debug('STDERR:', stderr);
-					new Notice('Conversion failed. Run: pip install markdown2');
-					return;
-				}
-
-				new Notice(`Exported: ${activeFile.basename}.html`);
+		try {
+			const existing = this.app.vault.getAbstractFileByPath(outputPath);
+			if (existing) {
+				await this.app.vault.adapter.write(outputPath, htmlOutput);
+			} else {
+				await this.app.vault.create(outputPath, htmlOutput);
 			}
-		);
+			new Notice(`Exported: ${activeFile.basename}.html`);
+		} catch (err) {
+			console.error('md2html export failed:', err);
+			new Notice('Conversion failed. See console for details.');
+		}
 	}
 }
-
