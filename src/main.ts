@@ -149,7 +149,7 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
+class DemoModal extends Modal {
 	onOpen() {
 		this.contentEl.setText('Woah!');
 	}
