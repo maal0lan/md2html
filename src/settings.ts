@@ -1,22 +1,22 @@
-import {App, PluginSettingTab, Setting, TFile} from "obsidian";
-import MyPlugin from "./main.js";
+import { App, PluginSettingTab, Setting } from 'obsidian';
+import Md2HtmlPlugin from './main.js';
 
-export interface MyPluginSettings {
+export interface Md2HtmlPluginSettings {
   mySetting: string;
   exportTheme: 'light' | 'dark' | 'blue';
   exportPath: string;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
+export const DEFAULT_SETTINGS: Md2HtmlPluginSettings = {
   mySetting: 'default',
   exportTheme: 'light',
   exportPath: ''
 };
 
-export class SampleSettingTab extends PluginSettingTab {
-  plugin: MyPlugin;
+export class ExportSettingTab extends PluginSettingTab {
+  plugin: Md2HtmlPlugin;
 
-  constructor(app: App, plugin: MyPlugin) {
+  constructor(app: App, plugin: Md2HtmlPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -37,11 +37,10 @@ export class SampleSettingTab extends PluginSettingTab {
 //          await this.plugin.saveSettings();
   //      }));
 
-    // Theme selector
     new Setting(containerEl)
-      .setName('Export Theme')
+      .setName('Export theme')
       .setDesc('Choose the CSS theme for the exported HTML')
-      .addDropdown(dropdown => {
+      .addDropdown((dropdown) => {
         dropdown
           .addOption('light', 'Light')
           .addOption('dark', 'Dark')
@@ -53,16 +52,17 @@ export class SampleSettingTab extends PluginSettingTab {
           });
       });
 
-    // Output folder picker (text input only)
     new Setting(containerEl)
-      .setName('Export Folder')
+      .setName('Export folder')
       .setDesc('Folder where the HTML file will be saved (empty = same folder as source)')
-      .addText(text => text
-        .setPlaceholder('Leave empty or type/paste an absolute folder path')
-        .setValue(this.plugin.settings.exportPath)
-        .onChange(async (value) => {
-          this.plugin.settings.exportPath = value.trim();
-          await this.plugin.saveSettings();
-        }));
+      .addText((text) =>
+        text
+          .setPlaceholder('Leave empty or type/paste an absolute folder path')
+          .setValue(this.plugin.settings.exportPath)
+          .onChange(async (value) => {
+            this.plugin.settings.exportPath = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
   }
 }

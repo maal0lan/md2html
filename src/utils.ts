@@ -1,4 +1,4 @@
-import { App, Plugin } from 'obsidian';
+import { Plugin } from 'obsidian';
 
 export interface ExportSettings {
   exportTheme: 'light' | 'dark' | 'blue';
@@ -14,10 +14,10 @@ const DEFAULT_SETTINGS: ExportSettings = {
  * Load export settings using Obsidian's built-in storage
  */
 export async function loadExportSettings(plugin: Plugin): Promise<ExportSettings> {
-  const data = await plugin.loadData();
+  const data = (await plugin.loadData()) as Partial<ExportSettings> | null;
   return {
     ...DEFAULT_SETTINGS,
-    ...data
+    ...(data ?? {})
   };
 }
 

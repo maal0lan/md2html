@@ -1,32 +1,61 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
-import { SampleSettingTab } from "./settings.js";
-import { loadExportSettings, saveExportSettings, ExportSettings } from "./utils.js";
+import { Notice, Plugin } from 'obsidian';
+import { ExportSettingTab } from './settings.js';
+import { loadExportSettings, saveExportSettings, ExportSettings } from './utils.js';
 
-const path = (window as any).require('path');
-const { execFile, execSync } = (window as any).require('child_process');
+interface NodePath {
+	join(...paths: string[]): string;
+	isAbsolute(path: string): boolean;
+	dirname(path: string): string;
+}
 
-export default class MyPlugin extends Plugin {
+type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void;
+
+interface ChildProcessModule {
+	execFile(command: string, args: string[], options: { windowsHide: boolean }, callback: ExecFileCallback): void;
+	execSync(command: string, options: { encoding: string }): string;
+}
+
+interface FsModule {
+	existsSync(path: string): boolean;
+	mkdirSync(path: string, options: { recursive: boolean }): void;
+}
+
+interface WindowWithRequire extends Window {
+	require(module: 'path'): NodePath;
+	require(module: 'child_process'): ChildProcessModule;
+	require(module: 'fs'): FsModule;
+	require(module: 'process'): { platform: string };
+}
+
+const windowWithRequire = window as unknown as WindowWithRequire;
+const path = windowWithRequire.require('path');
+const { execFile, execSync } = windowWithRequire.require('child_process');
+
+export default class Md2HtmlPlugin extends Plugin {
 	settings!: ExportSettings;
 
 	async onload() {
 		this.settings = await loadExportSettings(this);
-		console.log('Loaded settings:', this.settings);
+		console.debug('Loaded settings:', this.settings);
 
 		this.addCommand({
-	id: "convert-md-to-html",
-	name: "Convert current Markdown to HTML",
-	checkCallback: (checking) => {
-		const file = this.app.workspace.getActiveFile();
-		if (!file || file.extension !== "md") return false;
+			id: 'convert-md-to-html',
+			name: 'Convert current Markdown to HTML',
+			checkCallback: (checking) => {
+				const file = this.app.workspace.getActiveFile();
+				if (!file || file.extension !== 'md') {
+					return false;
+				}
 
-		if (!checking) {
-			this.convertActiveFile();
-		}
-		return true;
-	}
-});
+				if (!checking) {
+					void this.convertActiveFile();
+				}
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+				return true;
+			}
+		});
+
+		this.addSettingTab(new ExportSettingTab(this.app, this));
 	}
 
 	async updateTheme(theme: 'light' | 'dark' | 'blue') {
@@ -41,13 +70,17 @@ export default class MyPlugin extends Plugin {
 	// 🔥 FIXED Python finder
 	private findPython(): string {
 		const commands = ['python', 'python3', 'py'];
-		const process = (window as any).require('process');
+		const processModule = windowWithRequire.require('process');
 
 		for (const cmd of commands) {
 			try {
-				const result = process.platform === 'win32'
+				const result = processModule.platform === 'win32'
 					? execSync(`where ${cmd}`, { encoding: 'utf8' })
 					: execSync(`which ${cmd}`, { encoding: 'utf8' });
+
+				if (!result) {
+					continue;
+				}
 
 				const pythonPath = result
 					.split(/\r?\n/)[0]
@@ -55,11 +88,14 @@ export default class MyPlugin extends Plugin {
 					.replace(/\r/g, '');
 
 				if (pythonPath) {
-					console.log('Found Python:', pythonPath);
+					console.debug('Found Python:', pythonPath);
 					return pythonPath;
 				}
-			} catch {}
+			} catch {
+				// ignore missing Python executable
+			}
 		}
+
 		return '';
 	}
 
@@ -73,7 +109,7 @@ export default class MyPlugin extends Plugin {
 
 		const settings = await loadExportSettings(this);
 
-		const basePath = (this.app.vault.adapter as any).getBasePath();
+		const basePath = (this.app.vault.adapter as unknown as { getBasePath: () => string }).getBasePath();
 		const inputPath = path.join(basePath, activeFile.path);
 
 		let outputPath: string;
@@ -91,22 +127,23 @@ export default class MyPlugin extends Plugin {
 			outputPath = path.join(basePath, custom, activeFile.basename + '.html');
 		}
 
+		const configDir = (this.app.vault as { configDir?: string }).configDir ?? '.obsidian';
 		const scriptPath = path.join(
 			basePath,
-			'.obsidian',
+			configDir,
 			'plugins',
 			this.manifest.id,
 			'md2html.py'
 		);
 
-		const fs = (window as any).require('fs');
+		const fs = windowWithRequire.require('fs');
 
-		console.log('SCRIPT:', scriptPath);
-		console.log('INPUT:', inputPath);
-		console.log('OUTPUT:', outputPath);
+		console.debug('SCRIPT:', scriptPath);
+		console.debug('INPUT:', inputPath);
+		console.debug('OUTPUT:', outputPath);
 		
 		if (!fs.existsSync(scriptPath)) {
-			new Notice('❌ md2html.py not found');
+			new Notice('Md2html.py not found');
 			return;
 		}
 
@@ -117,7 +154,8 @@ export default class MyPlugin extends Plugin {
 
 		const pythonPath = this.findPython();
 		if (!pythonPath) {
-			new Notice('❌ Python not found');
+			new Notice('Python not found');
+			new Notice('Please install Python');
 			return;
 		}
 
@@ -132,28 +170,18 @@ export default class MyPlugin extends Plugin {
 				this.settings.exportTheme || 'light'
 			],
 			{ windowsHide: true },
-			(error: any, stdout: string, stderr: string) => {
+			(error: Error | null, stdout: string, stderr: string) => {
 				if (error) {
 					console.error('EXEC ERROR:', error);
-					console.error('STDOUT:', stdout);
-					console.error('STDERR:', stderr);
-					console.log('STDOUT:', stdout);
-					console.log('STDERR:', stderr);
-					new Notice('❌ Conversion failed');
+					console.debug('STDOUT:', stdout);
+					console.debug('STDERR:', stderr);
+					new Notice('Conversion failed pip install markdown2');
 					return;
 				}
 
-				new Notice(`✅ Exported: ${activeFile.basename}.html`);
+				new Notice(`Exported: ${activeFile.basename}.html`);
 			}
 		);
 	}
 }
 
-class DemoModal extends Modal {
-	onOpen() {
-		this.contentEl.setText('Woah!');
-	}
-	onClose() {
-		this.contentEl.empty();
-	}
-}
