@@ -94,7 +94,7 @@ function inlineMarkdown(text: string): string {
 	const codeSpans: string[] = [];
 	out = out.replace(/`([^`]+?)`/g, (_, code: string) => {
 		codeSpans.push(code);
-		return `\u0000CODE${codeSpans.length - 1}\u0000`;
+		return `@@MD2HTML_CODE_${codeSpans.length - 1}@@`;
 	});
 
 	// Images ![alt](src)
@@ -117,7 +117,7 @@ function inlineMarkdown(text: string): string {
 	out = out.replace(/~~([^~]+)~~/g, '<del>$1</del>');
 
 	// Restore code spans
-	out = out.replace(/\u0000CODE(\d+)\u0000/g, (_, i: string) => `<code>${codeSpans[Number(i)]}</code>`);
+	out = out.replace(/@@MD2HTML_CODE_(\d+)@@/g, (_, i: string) => `<code>${codeSpans[Number(i)]}</code>`);
 
 	return out;
 }
