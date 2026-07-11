@@ -1,7 +1,6 @@
-{   "id": "md2html",
+{   "id": "mdtohtml",
 	"name": "md2html",
 	"version": "2.0.0",
-	"main": "main.js",
 	"minAppVersion": "0.15.0",
 	"description": "converts markdown file to html files with builtin css for easy hosting.",
 	"author":"maalolan",
