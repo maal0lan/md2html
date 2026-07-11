@@ -78,14 +78,14 @@ export default class Md2HtmlPlugin extends Plugin {
 					? execSync(`where ${cmd}`, { encoding: 'utf8' })
 					: execSync(`which ${cmd}`, { encoding: 'utf8' });
 
-				if (!result) {
-					continue;
-				}
+				if (typeof result !== 'string') {
+  return '';
+}
 
-				const pythonPath = result
-					.split(/\r?\n/)[0]
-					.trim()
-					.replace(/\r/g, '');
+const pythonPath = String(result)
+  .split(/\r?\n/)
+  .find(line => line.trim().length > 0)
+  ?.trim() ?? '';
 
 				if (pythonPath) {
 					console.debug('Found Python:', pythonPath);
