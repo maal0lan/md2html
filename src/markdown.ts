@@ -1,82 +1,21 @@
-// ---------------------------------------------------------------------------
-// Themes (ported 1:1 from the old md2html.py THEMES dict)
-// ---------------------------------------------------------------------------
-
-export const THEMES: Record<'light' | 'dark' | 'blue', string> = {
-	light: `
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; }
-h1, h2, h3, h4, h5, h6 { color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; }
-h1 { font-size: 2.2em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
-h2 { font-size: 1.8em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }
-h3 { font-size: 1.5em; }
-p { margin-bottom: 1em; }
-a { color: #3498db; text-decoration: none; }
-a:hover { text-decoration: underline; }
-blockquote { border-left: 4px solid #ddd; margin: 1.5em 0; padding: 0.5em 1em; color: #666; background-color: #f9f9f9; }
-code { background-color: #f8f9fa; padding: 0.2em 0.4em; border-radius: 3px; font-family: 'Courier New', Courier, monospace; }
-pre { background-color: #f8f9fa; padding: 1em; overflow-x: auto; border-radius: 5px; }
-pre code { background: none; padding: 0; }
-table { border-collapse: collapse; width: 100%; margin: 1.5em 0; }
-th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-th { background-color: #f2f2f2; }
-tr:nth-child(even) { background-color: #f9f9f9; }
-ul, ol { margin-bottom: 1em; padding-left: 2em; }
-li { margin-bottom: 0.3em; }
-hr { border: 0; border-top: 1px solid #eee; margin: 2em 0; }
-img { max-width: 100%; height: auto; }
-`,
-	dark: `
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; line-height: 1.6; color: #eee; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #121212; }
-h1, h2, h3, h4, h5, h6 { color: #fff; margin-top: 1.5em; margin-bottom: 0.5em; }
-h1 { font-size: 2.2em; border-bottom: 2px solid #333; padding-bottom: 0.3em; }
-h2 { font-size: 1.8em; border-bottom: 1px solid #333; padding-bottom: 0.2em; }
-h3 { font-size: 1.5em; }
-p { margin-bottom: 1em; }
-a { color: #64b5f6; text-decoration: none; }
-a:hover { text-decoration: underline; }
-blockquote { border-left: 4px solid #444; margin: 1.5em 0; padding: 0.5em 1em; color: #bbb; background-color: #1e1e1e; }
-code { background-color: #1e1e1e; padding: 0.2em 0.4em; border-radius: 3px; font-family: 'Courier New', Courier, monospace; color: #f8f8f2; }
-pre { background-color: #1e1e1e; padding: 1em; overflow-x: auto; border-radius: 5px; border: 1px solid #333; }
-pre code { background: none; padding: 0; color: #f8f8f2; }
-table { border-collapse: collapse; width: 100%; margin: 1.5em 0; }
-th, td { border: 1px solid #444; padding: 8px; text-align: left; }
-th { background-color: #1e1e1e; }
-tr:nth-child(even) { background-color: #1a1a1a; }
-ul, ol { margin-bottom: 1em; padding-left: 2em; }
-li { margin-bottom: 0.3em; }
-hr { border: 0; border-top: 1px solid #333; margin: 2em 0; }
-img { max-width: 100%; height: auto; }
-`,
-	blue: `
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; line-height: 1.6; color: #2c3e50; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #ecf0f1; }
-h1, h2, h3, h4, h5, h6 { color: #1a5276; margin-top: 1.5em; margin-bottom: 0.5em; }
-h1 { font-size: 2.2em; border-bottom: 2px solid #aed6f1; padding-bottom: 0.3em; }
-h2 { font-size: 1.8em; border-bottom: 1px solid #aed6f1; padding-bottom: 0.2em; }
-h3 { font-size: 1.5em; }
-p { margin-bottom: 1em; }
-a { color: #154360; text-decoration: none; }
-a:hover { text-decoration: underline; }
-blockquote { border-left: 4px solid #aed6f1; margin: 1.5em 0; padding: 0.5em 1em; color: #566573; background-color: #d6eaf8; }
-code { background-color: #d6eaf8; padding: 0.2em 0.4em; border-radius: 3px; font-family: 'Courier New', Courier, monospace; }
-pre { background-color: #d6eaf8; padding: 1em; overflow-x: auto; border-radius: 5px; border: 1px solid #aed6f1; }
-pre code { background: none; padding: 0; }
-table { border-collapse: collapse; width: 100%; margin: 1.5em 0; }
-th, td { border: 1px solid #aed6f1; padding: 8px; text-align: left; }
-th { background-color: #aed6f1; }
-tr:nth-child(even) { background-color: #ebf5fb; }
-ul, ol { margin-bottom: 1em; padding-left: 2em; }
-li { margin-bottom: 0.3em; }
-hr { border: 0; border-top: 1px solid #aed6f1; margin: 2em 0; }
-img { max-width: 100%; height: auto; }
-`
-};
+import { getThemeCss, isThemeName, type ThemeName } from './themes.js';
 
 // ---------------------------------------------------------------------------
-// Minimal, dependency-free Markdown -> HTML converter
-// Supports: headers, hr, blockquotes, fenced code blocks, ordered/unordered
-// lists, tables (GFM-style), paragraphs, and inline bold/italic/strikethrough/
-// code/links/images.
+// Minimal, dependency-free Markdown -> HTML converter (Obsidian flavoured)
+// Supports: headers, hr, blockquotes, fenced code, ordered/unordered/task
+// lists, GFM tables, paragraphs, and inline bold/italic/strikethrough/
+// highlight/code/links/images, plus Obsidian ![[image.png]] embeds and
+// [[wikilinks]].
 // ---------------------------------------------------------------------------
+
+export interface ConvertOptions {
+	/** Map of image reference (as written in the note) -> data: URI. */
+	images?: Map<string, string>;
+}
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i;
+const REMOTE_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+const HOLD = '\uE000'; // sentinel used to protect already-rendered HTML
 
 function escapeHtml(str: string): string {
 	return str
@@ -86,41 +25,163 @@ function escapeHtml(str: string): string {
 		.replace(/"/g, '&quot;');
 }
 
-function inlineMarkdown(text: string): string {
-	// Escape HTML first, then re-introduce markdown-driven tags.
-	let out = escapeHtml(text);
+// ---------------------------------------------------------------------------
+// Image reference helpers (shared with images.ts so both sides use same keys)
+// ---------------------------------------------------------------------------
 
-	// Inline code (protect from further inline processing)
-	const codeSpans: string[] = [];
-	out = out.replace(/`([^`]+?)`/g, (_, code: string) => {
-		codeSpans.push(code);
-		return `@@MD2HTML_CODE_${codeSpans.length - 1}@@`;
+/** `![[photo.png|300]]` inner text -> "photo.png" */
+export function wikiEmbedTarget(inner: string): string {
+	const [target = ''] = inner.split('|');
+	const [file = ''] = target.split('#');
+	return file.trim();
+}
+
+/** `![alt](my%20img.png)` src -> "my img.png"; null for http/data/etc. */
+export function localImageKey(src: string): string | null {
+	let s = src.trim();
+	if (s.startsWith('<') && s.endsWith('>')) s = s.slice(1, -1);
+	if (REMOTE_RE.test(s)) return null;
+	try {
+		s = decodeURIComponent(s);
+	} catch {
+		// keep the raw string if it isn't valid URI encoding
+	}
+	return s;
+}
+
+/** All local image references used by a note (code blocks are ignored). */
+export function extractImageRefs(md: string): string[] {
+	const text = md.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]+`/g, '');
+	const refs = new Set<string>();
+
+	const embedRe = /!\[\[([^\]]+)\]\]/g;
+	let m: RegExpExecArray | null;
+	while ((m = embedRe.exec(text)) !== null) {
+		const target = wikiEmbedTarget(m[1] ?? '');
+		if (IMAGE_EXT_RE.test(target)) refs.add(target);
+	}
+
+	const stdRe = /!\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)/g;
+	while ((m = stdRe.exec(text)) !== null) {
+		const key = localImageKey(m[1] ?? '');
+		if (key && IMAGE_EXT_RE.test(key)) refs.add(key);
+	}
+
+	return Array.from(refs);
+}
+
+// ---------------------------------------------------------------------------
+// Inline rendering
+// ---------------------------------------------------------------------------
+
+function safeHref(href: string): string {
+	let h = href.trim();
+	if (h.startsWith('<') && h.endsWith('>')) h = h.slice(1, -1);
+	if (/^\s*(javascript|vbscript):/i.test(h)) h = '#';
+	return escapeHtml(h);
+}
+
+function renderEmbed(inner: string, ctx: ConvertOptions): string {
+	const pipe = inner.indexOf('|');
+	const extra = pipe === -1 ? '' : inner.slice(pipe + 1).trim();
+	const target = wikiEmbedTarget(inner);
+
+	// Non-image embeds (notes, PDFs, audio...) are shown as plain text.
+	if (!IMAGE_EXT_RE.test(target)) {
+		return `<span class="wikilink">${escapeHtml(target)}</span>`;
+	}
+
+	const src = ctx.images?.get(target);
+	if (!src) {
+		return `<span class="missing-embed">Image not found: ${escapeHtml(target)}</span>`;
+	}
+
+	let alt = target;
+	let attrs = '';
+	const size = /^(\d+)(?:x(\d+))?$/.exec(extra);
+	if (size) {
+		attrs += ` width="${size[1] ?? ''}"`;
+		if (size[2]) attrs += ` height="${size[2]}"`;
+	} else if (extra) {
+		alt = extra;
+	}
+	return `<img src="${src}" alt="${escapeHtml(alt)}"${attrs}>`;
+}
+
+function renderMarkdownImage(alt: string, src: string, title: string | undefined, ctx: ConvertOptions): string {
+	let attrs = '';
+	const sized = /^(.*?)\|(\d+)(?:x(\d+))?$/.exec(alt); // Obsidian: ![alt|300](x.png)
+	if (sized) {
+		alt = sized[1] ?? '';
+		attrs += ` width="${sized[2] ?? ''}"`;
+		if (sized[3]) attrs += ` height="${sized[3]}"`;
+	}
+	if (title) attrs += ` title="${escapeHtml(title)}"`;
+
+	const key = localImageKey(src);
+	const resolved = key !== null ? ctx.images?.get(key) : undefined;
+	const finalSrc = resolved ?? escapeHtml(src.trim().replace(/^<|>$/g, ''));
+	return `<img src="${finalSrc}" alt="${escapeHtml(alt)}"${attrs}>`;
+}
+
+function inlineMarkdown(text: string, ctx: ConvertOptions): string {
+	const stash: string[] = [];
+	const hold = (html: string): string => {
+		stash.push(html);
+		return `${HOLD}${stash.length - 1}${HOLD}`;
+	};
+
+	let out = text;
+
+	// 1. Inline code (protect from everything else)
+	out = out.replace(/`([^`]+?)`/g, (_m: string, code: string) => hold(`<code>${escapeHtml(code)}</code>`));
+
+	// 2. Obsidian embeds ![[...]]
+	out = out.replace(/!\[\[([^\]]+)\]\]/g, (_m: string, inner: string) => hold(renderEmbed(inner, ctx)));
+
+	// 3. Standard images ![alt](src "title")
+	out = out.replace(
+		/!\[([^\]]*)\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+"([^"]*)")?\s*\)/g,
+		(_m: string, alt: string, src: string, title: string | undefined) =>
+			hold(renderMarkdownImage(alt, src, title, ctx))
+	);
+
+	// 4. Links [text](href) - the text stays in the stream so it can be formatted
+	out = out.replace(
+		/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
+		(_m: string, txt: string, href: string, title: string | undefined) =>
+			hold(`<a href="${safeHref(href)}"${title ? ` title="${escapeHtml(title)}"` : ''}>`) + txt + hold('</a>')
+	);
+
+	// 5. Obsidian wikilinks [[Note|alias]] -> just the visible text
+	out = out.replace(/\[\[([^\]]+)\]\]/g, (_m: string, inner: string) => {
+		const pipe = inner.indexOf('|');
+		const display = pipe === -1
+			? inner.trim().replace(/#/g, ' > ')
+			: inner.slice(pipe + 1).trim();
+		return hold(`<span class="wikilink">${escapeHtml(display)}</span>`);
 	});
 
-	// Images ![alt](src)
-	out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
-		(_, alt: string, src: string, title: string) => `<img src="${src}" alt="${alt}"${title ? ` title="${title}"` : ''}>`);
+	// 6. Escape whatever is left, then apply emphasis
+	out = escapeHtml(out);
 
-	// Links [text](href)
-	out = out.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
-		(_, txt: string, href: string, title: string) => `<a href="${href}"${title ? ` title="${title}"` : ''}>${txt}</a>`);
-
-	// Bold + italic combos
 	out = out.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
 	out = out.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
 	out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 	out = out.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 	out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-	out = out.replace(/(?<!\w)_([^_]+)_(?!\w)/g, '<em>$1</em>');
-
-	// Strikethrough
+	out = out.replace(/(^|\W)_([^_]+)_(?!\w)/g, '$1<em>$2</em>');
 	out = out.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+	out = out.replace(/==([^=]+)==/g, '<mark>$1</mark>');
 
-	// Restore code spans
-	out = out.replace(/@@MD2HTML_CODE_(\d+)@@/g, (_, i: string) => `<code>${codeSpans[Number(i)]}</code>`);
-
-	return out;
+	// 7. Restore protected HTML
+	const restoreRe = new RegExp(`${HOLD}(\\d+)${HOLD}`, 'g');
+	return out.replace(restoreRe, (_m: string, i: string) => stash[Number(i)] ?? '');
 }
+
+// ---------------------------------------------------------------------------
+// Block rendering
+// ---------------------------------------------------------------------------
 
 function isTableSeparator(line: string): boolean {
 	return /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(line) ||
@@ -134,25 +195,39 @@ function splitTableRow(line: string): string[] {
 	return row.split('|').map(cell => cell.trim());
 }
 
-export function convertMarkdownToHtml(mdText: string): string {
+function renderListItem(text: string, ctx: ConvertOptions): string {
+	const task = /^\[([ xX])\]\s+(.*)$/.exec(text);
+	if (task) {
+		const checked = task[1] === ' ' ? '' : ' checked';
+		return `<li class="task"><input type="checkbox" disabled${checked}> ${inlineMarkdown(task[2] ?? '', ctx)}</li>`;
+	}
+	return `<li>${inlineMarkdown(text, ctx)}</li>`;
+}
+
+const HR_RE = /^\s*([-*_])\s*(\1\s*){2,}$/;
+const UL_RE = /^\s*[-*+]\s+/;
+const OL_RE = /^\s*\d+[.)]\s+/;
+
+export function convertMarkdownToHtml(mdText: string, ctx: ConvertOptions = {}): string {
 	const lines = mdText.replace(/\r\n/g, '\n').split('\n');
 	const html: string[] = [];
+	const at = (idx: number): string => lines[idx] ?? '';
 	let i = 0;
 
 	while (i < lines.length) {
-		const line = lines[i];
+		const line = at(i);
 
 		// Blank line
 		if (line.trim() === '') { i++; continue; }
 
-		// Fenced code block
-		const fenceMatch = line.match(/^```(\S*)\s*$/);
+		// Fenced code block (```lang optional-title)
+		const fenceMatch = /^```(.*)$/.exec(line);
 		if (fenceMatch) {
-			const lang = fenceMatch[1];
+			const lang = ((fenceMatch[1] ?? '').trim().split(/\s+/)[0] ?? '').replace(/[^\w+#.-]/g, '');
 			const codeLines: string[] = [];
 			i++;
-			while (i < lines.length && !/^```\s*$/.test(lines[i])) {
-				codeLines.push(lines[i]);
+			while (i < lines.length && !/^```\s*$/.test(at(i))) {
+				codeLines.push(at(i));
 				i++;
 			}
 			i++; // skip closing fence
@@ -162,17 +237,17 @@ export function convertMarkdownToHtml(mdText: string): string {
 		}
 
 		// Horizontal rule
-		if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(line)) {
+		if (HR_RE.test(line)) {
 			html.push('<hr>');
 			i++;
 			continue;
 		}
 
 		// Headers
-		const headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+		const headerMatch = /^(#{1,6})\s+(.*)$/.exec(line);
 		if (headerMatch) {
-			const level = headerMatch[1].length;
-			html.push(`<h${level}>${inlineMarkdown(headerMatch[2].trim())}</h${level}>`);
+			const level = (headerMatch[1] ?? '#').length;
+			html.push(`<h${level}>${inlineMarkdown((headerMatch[2] ?? '').trim(), ctx)}</h${level}>`);
 			i++;
 			continue;
 		}
@@ -180,29 +255,29 @@ export function convertMarkdownToHtml(mdText: string): string {
 		// Blockquote
 		if (/^\s*>/.test(line)) {
 			const quoteLines: string[] = [];
-			while (i < lines.length && /^\s*>/.test(lines[i])) {
-				quoteLines.push(lines[i].replace(/^\s*>\s?/, ''));
+			while (i < lines.length && /^\s*>/.test(at(i))) {
+				quoteLines.push(at(i).replace(/^\s*>\s?/, ''));
 				i++;
 			}
-			html.push(`<blockquote>${convertMarkdownToHtml(quoteLines.join('\n'))}</blockquote>`);
+			html.push(`<blockquote>${convertMarkdownToHtml(quoteLines.join('\n'), ctx)}</blockquote>`);
 			continue;
 		}
 
 		// Table (header row + separator row)
-		if (line.includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+		if (line.includes('|') && i + 1 < lines.length && isTableSeparator(at(i + 1))) {
 			const headerCells = splitTableRow(line);
 			i += 2;
 			const bodyRows: string[][] = [];
-			while (i < lines.length && lines[i].trim() !== '' && lines[i].includes('|')) {
-				bodyRows.push(splitTableRow(lines[i]));
+			while (i < lines.length && at(i).trim() !== '' && at(i).includes('|')) {
+				bodyRows.push(splitTableRow(at(i)));
 				i++;
 			}
 			let table = '<table>\n<thead>\n<tr>';
-			for (const cell of headerCells) table += `<th>${inlineMarkdown(cell)}</th>`;
+			for (const cell of headerCells) table += `<th>${inlineMarkdown(cell, ctx)}</th>`;
 			table += '</tr>\n</thead>\n<tbody>\n';
 			for (const row of bodyRows) {
 				table += '<tr>';
-				for (const cell of row) table += `<td>${inlineMarkdown(cell)}</td>`;
+				for (const cell of row) table += `<td>${inlineMarkdown(cell, ctx)}</td>`;
 				table += '</tr>\n';
 			}
 			table += '</tbody>\n</table>';
@@ -211,53 +286,67 @@ export function convertMarkdownToHtml(mdText: string): string {
 		}
 
 		// Unordered list
-		if (/^\s*[-*+]\s+/.test(line)) {
+		if (UL_RE.test(line)) {
 			const items: string[] = [];
-			while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-				items.push(lines[i].replace(/^\s*[-*+]\s+/, ''));
+			while (i < lines.length && UL_RE.test(at(i))) {
+				items.push(renderListItem(at(i).replace(UL_RE, ''), ctx));
 				i++;
 			}
-			html.push('<ul>\n' + items.map(it => `<li>${inlineMarkdown(it)}</li>`).join('\n') + '\n</ul>');
+			html.push('<ul>\n' + items.join('\n') + '\n</ul>');
 			continue;
 		}
 
 		// Ordered list
-		if (/^\s*\d+[.)]\s+/.test(line)) {
+		if (OL_RE.test(line)) {
 			const items: string[] = [];
-			while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-				items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ''));
+			while (i < lines.length && OL_RE.test(at(i))) {
+				items.push(renderListItem(at(i).replace(OL_RE, ''), ctx));
 				i++;
 			}
-			html.push('<ol>\n' + items.map(it => `<li>${inlineMarkdown(it)}</li>`).join('\n') + '\n</ol>');
+			html.push('<ol>\n' + items.join('\n') + '\n</ol>');
 			continue;
 		}
 
-		// Paragraph (collect consecutive non-blank, non-special lines)
+		// Paragraph (consecutive non-blank, non-special lines)
 		const paraLines: string[] = [];
 		while (
 			i < lines.length &&
-			lines[i].trim() !== '' &&
-			!/^```/.test(lines[i]) &&
-			!/^(#{1,6})\s+/.test(lines[i]) &&
-			!/^\s*>/.test(lines[i]) &&
-			!/^\s*[-*+]\s+/.test(lines[i]) &&
-			!/^\s*\d+[.)]\s+/.test(lines[i]) &&
-			!/^\s*([-*_])\s*(\1\s*){2,}$/.test(lines[i])
+			at(i).trim() !== '' &&
+			!/^```/.test(at(i)) &&
+			!/^(#{1,6})\s+/.test(at(i)) &&
+			!/^\s*>/.test(at(i)) &&
+			!UL_RE.test(at(i)) &&
+			!OL_RE.test(at(i)) &&
+			!HR_RE.test(at(i))
 		) {
-			paraLines.push(lines[i]);
+			paraLines.push(at(i));
 			i++;
 		}
-		if (paraLines.length) {
-			html.push(`<p>${inlineMarkdown(paraLines.join(' ').trim())}</p>`);
+		if (paraLines.length === 0) {
+			// Safety net: never get stuck on a line nothing else claimed.
+			paraLines.push(line);
+			i++;
 		}
+		// Obsidian shows single newlines as line breaks, so we do too.
+		html.push(`<p>${paraLines.map(l => inlineMarkdown(l.trim(), ctx)).join('<br>\n')}</p>`);
 	}
 
 	return html.join('\n');
 }
 
-export function buildHtmlDocument(mdText: string, themeName: 'light' | 'dark' | 'blue', title: string): string {
-	const bodyHtml = convertMarkdownToHtml(mdText);
-	const themeCss = THEMES[themeName] || THEMES.light;
+export function buildHtmlDocument(
+	mdText: string,
+	themeName: ThemeName,
+	title: string,
+	options: ConvertOptions = {}
+): string {
+	// Drop YAML frontmatter (--- ... ---) at the very top of the note.
+	const body = mdText
+		.replace(/\r\n/g, '\n')
+		.replace(/^---\n[\s\S]*?\n---[ \t]*(?:\n|$)/, '');
+
+	const bodyHtml = convertMarkdownToHtml(body, options);
+	const themeCss = getThemeCss(isThemeName(themeName) ? themeName : 'light');
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
