@@ -20,6 +20,8 @@ export interface ImageExportOptions {
 	exportDir: string;
 	/** Folder name (inside exportDir) that receives the images. */
 	assetsFolder: string;
+	/** Relative prefix from the current HTML page back to the site root. */
+	assetPrefix?: string;
 }
 
 function resolveFile(app: App, ref: string, sourcePath: string): TFile | null {
@@ -86,7 +88,7 @@ export async function collectImages(
 			}
 			const name = `${slug(file.basename)}-${shortHash(file.path)}.${ext}`;
 			await writeBinaryFile(app, normalizePath(`${assetsDir}/${name}`), data);
-			images.set(ref, `${opts.assetsFolder}/${name}`);
+			images.set(ref, `${opts.assetPrefix ?? ''}${opts.assetsFolder}/${name}`);
 		} catch (err) {
 			console.error(`md2html: could not export image "${ref}"`, err);
 		}

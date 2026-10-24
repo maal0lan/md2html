@@ -2,11 +2,14 @@ import { TFile, normalizePath, type App, type Plugin } from 'obsidian';
 import { isThemeName, type ThemeName } from './themes.js';
 
 export type ImageMode = 'files' | 'embed';
+export type ExportMode = 'legacy' | 'smart';
 
-export const DEFAULT_EXPORT_FOLDER = 'exports';
+export const DEFAULT_EXPORT_FOLDER = 'exports-md2html';
 export const DEFAULT_ASSETS_FOLDER = 'assets';
 
 export interface ExportSettings {
+	/** Legacy exports one note; smart exports the active folder as a website. */
+	exportMode: ExportMode;
 	exportTheme: ThemeName;
 	/** Vault-relative folder that receives the HTML files (the deployable root). */
 	exportPath: string;
@@ -17,6 +20,7 @@ export interface ExportSettings {
 }
 
 export const DEFAULT_SETTINGS: ExportSettings = {
+	exportMode: 'legacy',
 	exportTheme: 'light',
 	exportPath: DEFAULT_EXPORT_FOLDER,
 	assetsFolder: DEFAULT_ASSETS_FOLDER,
@@ -80,8 +84,10 @@ export async function loadExportSettings(plugin: Plugin): Promise<ExportSettings
 	const data = (await plugin.loadData()) as Partial<ExportSettings> | null;
 	const settings: ExportSettings = { ...DEFAULT_SETTINGS, ...(data ?? {}) };
 
+	if (settings.exportMode !== 'legacy' && settings.exportMode !== 'smart') settings.exportMode = 'legacy';
 	if (!isThemeName(settings.exportTheme)) settings.exportTheme = DEFAULT_SETTINGS.exportTheme;
 	settings.exportPath = cleanFolder(String(settings.exportPath ?? '')) || DEFAULT_EXPORT_FOLDER;
+	if (settings.exportPath === 'exports') settings.exportPath = DEFAULT_EXPORT_FOLDER;
 	settings.assetsFolder = cleanAssetsFolder(String(settings.assetsFolder ?? ''));
 	if (settings.imageMode !== 'files' && settings.imageMode !== 'embed') settings.imageMode = 'files';
 	return settings;

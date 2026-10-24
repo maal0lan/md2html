@@ -16,15 +16,27 @@ export class ExportSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
+			.setName('Export mode')
+			.setDesc('Legacy exports the open note as one HTML page. Smart Export turns the current folder (and subfolders) into a website.')
+			.addDropdown((dropdown) => dropdown
+				.addOption('legacy', 'Legacy — single HTML page')
+				.addOption('smart', 'Smart — folder website')
+				.setValue(this.plugin.settings.exportMode)
+				.onChange(async (value: string) => {
+					this.plugin.settings.exportMode = value === 'smart' ? 'smart' : 'legacy';
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Export theme')
-			.setDesc('Choose the look of the exported HTML file')
+			.setDesc('Choose the look of the exported website and HTML pages')
 			.addDropdown((dropdown) => {
 				for (const name of THEME_NAMES) {
 					dropdown.addOption(name, THEME_LABELS[name]);
 				}
 				dropdown
 					.setValue(this.plugin.settings.exportTheme)
-					.onChange(async (value) => {
+					.onChange(async (value: string) => {
 						if (!isThemeName(value)) return;
 						this.plugin.settings.exportTheme = value;
 						await this.plugin.saveSettings();
@@ -33,12 +45,12 @@ export class ExportSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Export folder')
-			.setDesc(`Vault-relative folder that receives the HTML files. This folder is the one you deploy (default: ${DEFAULT_EXPORT_FOLDER}).`)
+			.setDesc(`Vault-relative output root for the mirrored website. Smart Export keeps the vault hierarchy beneath this folder; deploy this folder (default: ${DEFAULT_EXPORT_FOLDER}).`)
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_EXPORT_FOLDER)
 					.setValue(this.plugin.settings.exportPath)
-					.onChange(async (value) => {
+					.onChange(async (value: string) => {
 						this.plugin.settings.exportPath = cleanFolder(value) || DEFAULT_EXPORT_FOLDER;
 						await this.plugin.saveSettings();
 					})
@@ -52,7 +64,7 @@ export class ExportSettingTab extends PluginSettingTab {
 					.addOption('files', 'Save as separate files')
 					.addOption('embed', 'Embed inside the HTML')
 					.setValue(this.plugin.settings.imageMode)
-					.onChange(async (value) => {
+					.onChange(async (value: string) => {
 						this.plugin.settings.imageMode = value === 'embed' ? 'embed' : 'files';
 						await this.plugin.saveSettings();
 					})
@@ -65,7 +77,7 @@ export class ExportSettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder(DEFAULT_ASSETS_FOLDER)
 					.setValue(this.plugin.settings.assetsFolder)
-					.onChange(async (value) => {
+					.onChange(async (value: string) => {
 						this.plugin.settings.assetsFolder = cleanAssetsFolder(value);
 						await this.plugin.saveSettings();
 					})

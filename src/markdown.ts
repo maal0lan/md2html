@@ -11,6 +11,10 @@ import { getThemeCss, isThemeName, type ThemeName } from './themes.js';
 export interface ConvertOptions {
 	/** Map of image reference (as written in the note) -> data: URI. */
 	images?: Map<string, string>;
+	/** Resolved Obsidian note targets -> exported relative HTML URLs (Smart Export). */
+	wikilinks?: Map<string, string>;
+	/** Preferred resolver (uses Obsidian link path rules). */
+	resolveWikilink?: (target: string) => string | undefined;
 }
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i;
@@ -105,7 +109,7 @@ function renderEmbed(inner: string, ctx: ConvertOptions): string {
 	} else if (extra) {
 		alt = extra;
 	}
-	return `<img src="${src}" alt="${escapeHtml(alt)}"${attrs}>`;
+	return `<img src="${attrSrc(src)}" alt="${escapeHtml(alt)}"${attrs}>`;
 }
 
 function renderMarkdownImage(alt: string, src: string, title: string | undefined, ctx: ConvertOptions): string {
@@ -120,8 +124,28 @@ function renderMarkdownImage(alt: string, src: string, title: string | undefined
 
 	const key = localImageKey(src);
 	const resolved = key !== null ? ctx.images?.get(key) : undefined;
-	const finalSrc = resolved ?? escapeHtml(src.trim().replace(/^<|>$/g, ''));
-	return `<img src="${finalSrc}" alt="${escapeHtml(alt)}"${attrs}>`;
+	const finalSrc = resolved ?? src.trim().replace(/^<|>$/g, '');
+	return `<img src="${attrSrc(finalSrc)}" alt="${escapeHtml(alt)}"${attrs}>`;
+}
+
+function attrSrc(src: string): string {
+	if (/^(?:data:|https?:|\/\/)/i.test(src)) return escapeHtml(src);
+	return escapeHtml(src.split('/').map((seg) => (seg === '..' || seg === '.' ? seg : encodeURIComponent(seg))).join('/'));
+}
+
+function slugify(text: string): string {
+	return text.trim().toLowerCase().replace(/\s+/g, '-').replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, '');
+}
+
+function wikiHref(ctx: ConvertOptions, target: string): string | undefined {
+	if (ctx.resolveWikilink) {
+		const href = ctx.resolveWikilink(target);
+		if (href) return href;
+	}
+	if (!ctx.wikilinks) return undefined;
+	return ctx.wikilinks.get(target)
+		?? ctx.wikilinks.get(target.replace(/\.md$/i, ''))
+		?? ctx.wikilinks.get(target.toLowerCase());
 }
 
 function inlineMarkdown(text: string, ctx: ConvertOptions): string {
@@ -153,13 +177,23 @@ function inlineMarkdown(text: string, ctx: ConvertOptions): string {
 			hold(`<a href="${safeHref(href)}"${title ? ` title="${escapeHtml(title)}"` : ''}>`) + txt + hold('</a>')
 	);
 
-	// 5. Obsidian wikilinks [[Note|alias]] -> just the visible text
+	// 5. Obsidian wikilinks. Smart Export resolves known notes to real HTML routes.
 	out = out.replace(/\[\[([^\]]+)\]\]/g, (_m: string, inner: string) => {
 		const pipe = inner.indexOf('|');
-		const display = pipe === -1
-			? inner.trim().replace(/#/g, ' > ')
-			: inner.slice(pipe + 1).trim();
-		return hold(`<span class="wikilink">${escapeHtml(display)}</span>`);
+		const rawTarget = (pipe === -1 ? inner : inner.slice(0, pipe)).trim();
+		const display = pipe === -1 ? rawTarget.replace(/#/g, ' > ') : inner.slice(pipe + 1).trim();
+		const hash = rawTarget.indexOf('#');
+		const targetWithoutHeading = (hash === -1 ? rawTarget : rawTarget.slice(0, hash)).trim();
+		const heading = hash === -1 ? '' : rawTarget.slice(hash + 1).trim();
+		let href: string | undefined;
+		if (!targetWithoutHeading && heading) href = `#${slugify(heading)}`;
+		else if (targetWithoutHeading) {
+			href = wikiHref(ctx, targetWithoutHeading);
+			if (href && heading) href = `${href}#${slugify(heading)}`;
+		}
+		return hold(href
+			? `<a class="wikilink" href="${safeHref(href)}">${escapeHtml(display)}</a>`
+			: `<span class="wikilink">${escapeHtml(display)}</span>`);
 	});
 
 	// 6. Escape whatever is left, then apply emphasis
@@ -247,7 +281,9 @@ export function convertMarkdownToHtml(mdText: string, ctx: ConvertOptions = {}):
 		const headerMatch = /^(#{1,6})\s+(.*)$/.exec(line);
 		if (headerMatch) {
 			const level = (headerMatch[1] ?? '#').length;
-			html.push(`<h${level}>${inlineMarkdown((headerMatch[2] ?? '').trim(), ctx)}</h${level}>`);
+			const headingText = (headerMatch[2] ?? '').trim();
+			const id = slugify(headingText);
+			html.push(`<h${level}${id ? ` id="${escapeHtml(id)}"` : ''}>${inlineMarkdown(headingText, ctx)}</h${level}>`);
 			i++;
 			continue;
 		}
@@ -355,10 +391,18 @@ export function buildHtmlDocument(
 <title>${escapeHtml(title)}</title>
 <style>
 ${themeCss}
+html{background:var(--bg)}
+html.invert{filter:invert(1) hue-rotate(180deg)}
+html.invert img,html.invert video,html.invert canvas{filter:invert(1) hue-rotate(180deg)}
+.invert-btn{position:fixed;top:14px;right:14px;z-index:20;border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--soft);color:var(--fg);cursor:pointer;font:inherit;font-size:13px}
+.invert-btn:hover{border-color:var(--accent)}
+@media print{.invert-btn{display:none}}
 </style>
 </head>
 <body>
+<button class="invert-btn" id="invert-toggle" type="button" aria-pressed="false" title="Invert page colours">Invert</button>
 ${bodyHtml}
+<script>(()=>{const root=document.documentElement;const btn=document.getElementById('invert-toggle');const setInvert=(on)=>{root.classList.toggle('invert',on);btn.setAttribute('aria-pressed',String(on));btn.textContent=on?'Original':'Invert';try{localStorage.setItem('md2html-invert',on?'1':'0')}catch{}};try{if(localStorage.getItem('md2html-invert')==='1')setInvert(true)}catch{}btn.addEventListener('click',()=>setInvert(!root.classList.contains('invert')))})();</script>
 </body>
 </html>`;
 }
