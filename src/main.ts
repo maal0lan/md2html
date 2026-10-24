@@ -91,7 +91,7 @@ export default class Md2HtmlPlugin extends Plugin {
 		const startedAt = Date.now();
 		const imageIssues: string[] = [];
 		const notice = new Notice(`md2html: exporting ${activeFile.path}…`);
-		console.info(`[md2html] Legacy export started: ${activeFile.path}`);
+		console.debug(`[md2html] Legacy export started: ${activeFile.path}`);
 		try {
 			const mdContent = await this.app.vault.read(activeFile);
 
@@ -122,7 +122,7 @@ export default class Md2HtmlPlugin extends Plugin {
 			await writeTextFile(this.app, normalizePath(`${exportDir}/${fileName}`), htmlOutput);
 
 			const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-			console.info('[md2html] Legacy export complete', { source: activeFile.path, output: `${exportDir}/${fileName}`, imageIssues, elapsedSeconds: elapsed });
+			console.debug('[md2html] Legacy export complete', { source: activeFile.path, output: `${exportDir}/${fileName}`, imageIssues, elapsedSeconds: elapsed });
 			notice.setMessage(`Exported ${activeFile.basename} → ${exportDir}/${fileName} · ${imageIssues.length} image issues · ${elapsed}s${imageIssues.length ? ' · see console' : ''}`);
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
