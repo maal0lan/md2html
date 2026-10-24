@@ -6,9 +6,11 @@ import { getThemeCss } from './themes.js';
 
 const MANIFEST = '.md2html-manifest.json';
 const WIN_BAD = /[<>:"|?*\u0000-\u001f]/g;
+let exportInProgress = false;
 
-interface ManifestEntry { path: string; mtime: number; size: number; output: string; }
-interface Manifest { version: 2; sourceFolder: string; settingsKey: string; files: ManifestEntry[]; generated: string[]; }
+interface ImageDependency { path: string; mtime: number; size: number; }
+interface ManifestEntry { path: string; mtime: number; size: number; output: string; images?: ImageDependency[]; imageIssues?: string[]; }
+interface Manifest { version: 3; sourceFolder: string; settingsKey: string; files: ManifestEntry[]; generated: string[]; generatedAt: string; }
 
 function escapeHtml(value: string): string {
 	return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -45,9 +47,12 @@ function relativeToSource(path: string, sourceRoot: string): string {
 	if (p.startsWith(`${root}/`)) return p.slice(root.length + 1);
 	return p;
 }
-function noteOutput(file: TFile, sourceRoot: string): string {
-	const rel = relativeToSource(file.path.replace(/\.md$/i, ''), sourceRoot);
-	return `${safeOutputPath(rel)}.html`;
+function noteOutput(file: TFile, sourceRoot: string, folderOutputs: Map<string, string>): string {
+	const parent = relativeToSource(file.parent?.path ?? '', sourceRoot);
+	const parentIndex = folderOutputs.get(parent) ?? folderIndex(parent);
+	const parentDir = parentIndex.includes('/') ? parentIndex.slice(0, parentIndex.lastIndexOf('/')) : '';
+	const name = `${safeSegment(file.basename)}.html`;
+	return parentDir ? `${parentDir}/${name}` : name;
 }
 function shortHash(text: string): string {
 	let hash = 5381;
@@ -92,6 +97,14 @@ function relativeAssetPrefix(htmlPath: string): string {
 function makeSettingsKey(settings: ExportSettings): string {
 	return JSON.stringify({ theme: settings.exportTheme, imageMode: settings.imageMode, assetsFolder: cleanAssetsFolder(settings.assetsFolder) });
 }
+async function imageDependenciesUnchanged(app: App, dependencies: ImageDependency[] | undefined): Promise<boolean> {
+	if (!Array.isArray(dependencies)) return false;
+	for (const dependency of dependencies) {
+		const file = app.vault.getAbstractFileByPath(dependency.path);
+		if (!(file instanceof TFile) || file.stat.mtime !== dependency.mtime || file.stat.size !== dependency.size) return false;
+	}
+	return true;
+}
 function pageShell(title: string, body: string, css: string, nav: string, homeHref: string, currentHref: string): string {
 	return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -118,34 +131,68 @@ function makeNav(files: TFile[], outputs: Map<string, string>, currentHtml: stri
 
 /** Export the selected folder (and its subfolders) as one static website. */
 export async function exportFolderWebsite(app: App, folder: TFolder, settings: ExportSettings): Promise<void> {
+	if (exportInProgress) {
+		new Notice('md2html Smart Export is already running. Wait for it to finish.');
+		return;
+	}
+	exportInProgress = true;
+	const notice = new Notice('md2html Smart Export: preparing…');
 	try {
-		await exportFolderWebsiteInner(app, folder, settings);
+		await exportFolderWebsiteInner(app, folder, settings, notice);
 	} catch (err) {
+		const reason = err instanceof Error ? err.message : String(err);
 		console.error('md2html Smart Export failed:', err);
-		new Notice('Smart Export failed. See the developer console for details.');
+		notice.setMessage(`Smart Export failed: ${reason}. See developer console for details.`);
+	} finally {
+		exportInProgress = false;
 	}
 }
 
-async function exportFolderWebsiteInner(app: App, folder: TFolder, settings: ExportSettings): Promise<void> {
+async function exportFolderWebsiteInner(app: App, folder: TFolder, settings: ExportSettings, notice: Notice): Promise<void> {
+	const startedAt = Date.now();
 	const exportDir = cleanFolder(settings.exportPath) || 'exports-md2html';
 	const sourceRoot = folder.path === '/' ? '' : folder.path;
-	if (cleanRelative(sourceRoot) && isInside(sourceRoot, exportDir)) {
-		new Notice('The export folder cannot be used as a source folder. Choose a vault folder outside the export folder.');
+	if (sourceRoot && isInside(sourceRoot, exportDir)) {
+		notice.setMessage('Export cancelled: the export folder cannot be used as a source folder.');
 		return;
 	}
 	const files = sourceNotes(app, sourceRoot, exportDir);
 	if (!files.length) {
-		new Notice(`No Markdown notes in "${titleForFolder('', sourceRoot)}" or its subfolders.`);
+		notice.setMessage(`No Markdown notes in "${titleForFolder('', sourceRoot)}" or its subfolders.`);
 		return;
 	}
-	new Notice(`Smart Export started: ${files.length} notes from "${titleForFolder('', sourceRoot)}"...`);
+	notice.setMessage(`Exporting website from "${titleForFolder('', sourceRoot)}" (${files.length} notes)…`);
+	console.info(`[md2html] Website export started`, { sourceRoot: sourceRoot || '/', exportDir, notes: files.length, theme: settings.exportTheme, imageMode: settings.imageMode });
 	await ensureFolder(app, exportDir);
 	const folders = foldersForNotes(files, sourceRoot);
-	const reserved = new Set(folders.map((path) => folderIndex(path).toLowerCase()));
+	// Folder names can become identical after URL-safe sanitization (for example, ':' and '?').
+	// Allocate unique folder routes before note routes so no index page can overwrite another.
+	const folderOutputs = new Map<string, string>();
+	const usedFolderOutputs = new Set<string>();
+	// Allocate parent folders first so any disambiguated parent route is inherited by its children.
+	const routeFolders = [...folders].sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+	for (const sourceFolder of routeFolders) {
+		let output: string;
+		if (!sourceFolder) {
+			output = 'index.html';
+		} else {
+			const parent = parentFolder(sourceFolder);
+			const parentIndex = folderOutputs.get(parent) ?? 'index.html';
+			const parentDir = parentIndex.includes('/') ? parentIndex.slice(0, parentIndex.lastIndexOf('/')) : '';
+			const segment = safeSegment(sourceFolder.split('/').pop() || 'folder');
+			output = `${parentDir ? `${parentDir}/` : ''}${segment}/index.html`;
+			if (usedFolderOutputs.has(output.toLowerCase())) output = `${parentDir ? `${parentDir}/` : ''}${segment}--${shortHash(sourceFolder)}/index.html`;
+			while (usedFolderOutputs.has(output.toLowerCase())) output = output.replace('/index.html', `-${shortHash(output + sourceFolder)}/index.html`);
+		}
+		usedFolderOutputs.add(output.toLowerCase());
+		folderOutputs.set(sourceFolder, output);
+	}
+	const folderRoute = (sourceFolder: string): string => folderOutputs.get(sourceFolder) ?? folderIndex(sourceFolder);
+	const reserved = new Set([...folderOutputs.values()].map((path) => path.toLowerCase()));
 	const outputs = new Map<string, string>();
 	const used = new Set<string>(reserved);
 	for (const file of files) {
-		let output = noteOutput(file, sourceRoot);
+		let output = noteOutput(file, sourceRoot, folderOutputs);
 		if (used.has(output.toLowerCase())) output = output.replace(/\.html$/i, `--${shortHash(file.path)}.html`);
 		while (used.has(output.toLowerCase())) output = output.replace(/\.html$/i, `-${shortHash(output + file.path)}.html`);
 		used.add(output.toLowerCase());
@@ -158,9 +205,22 @@ async function exportFolderWebsiteInner(app: App, folder: TFolder, settings: Exp
 	try {
 		if (await app.vault.adapter.exists(manifestPath)) previous = JSON.parse(await app.vault.adapter.read(manifestPath)) as Manifest;
 	} catch (err) { console.warn('md2html: previous manifest could not be read; rebuilding generated pages.', err); }
-	const oldGenerated = new Set(previous?.generated ?? []);
+	const oldGenerated = new Set(Array.isArray(previous?.generated) ? previous!.generated.filter((item): item is string => typeof item === 'string') : []);
 	const generated = new Set<string>([MANIFEST]);
 	const entries: ManifestEntry[] = [];
+	const previousFiles = Array.isArray(previous?.files) ? previous!.files.filter((entry): entry is ManifestEntry => Boolean(entry) && typeof entry.path === 'string' && typeof entry.output === 'string' && typeof entry.mtime === 'number' && typeof entry.size === 'number') : [];
+	const previousEntries = new Map(previousFiles.map((entry) => [entry.path, entry]));
+	const previousPaths = new Set(previousEntries.keys());
+	const currentPaths = new Set(files.map((file) => file.path));
+	const structureChanged = previous?.version !== 3 || (previous.sourceFolder ?? '') !== sourceRoot || previousPaths.size !== currentPaths.size || [...currentPaths].some((path) => !previousPaths.has(path));
+	const canReusePages = !structureChanged && previous?.settingsKey === settingsKey;
+	const failedFiles: string[] = [];
+	const imageIssues: string[] = [];
+	let pagesWritten = 0;
+	let pagesUnchanged = 0;
+	let imagesSeen = 0;
+	let assetsWritten = 0;
+	let assetsUnchanged = 0;
 	const folderFiles = new Map<string, TFile[]>();
 	for (const file of files) {
 		const parent = relativeToSource(file.parent?.path ?? '', sourceRoot);
@@ -175,46 +235,88 @@ async function exportFolderWebsiteInner(app: App, folder: TFolder, settings: Exp
 		childFolders.get(parent)!.push(path);
 	}
 
-	for (const file of files) {
-		const output = outputs.get(file.path)!;
-		const outputPath = normalizePath(`${exportDir}/${output}`);
-		const md = await app.vault.read(file);
-		const images = await collectImages(app, md, file.path, {
-			mode: settings.imageMode,
-			exportDir,
-			assetsFolder: cleanAssetsFolder(settings.assetsFolder),
-			assetPrefix: relativeAssetPrefix(output)
-		});
-		const body = convertMarkdownToHtml(stripFrontmatter(md), {
-			images,
-			resolveWikilink: (target: string) => {
-				const dest = app.metadataCache.getFirstLinkpathDest(target, file.path);
-				if (!dest) return undefined;
-				const destOut = outputs.get(dest.path);
-				if (!destOut) return undefined;
-				return relativeHref(output, destOut);
+	for (const [fileIndex, file] of files.entries()) {
+		notice.setMessage(`Smart Export: processing note ${fileIndex + 1}/${files.length} · ${file.path}`);
+		try {
+			const output = outputs.get(file.path)!;
+			const outputPath = normalizePath(`${exportDir}/${output}`);
+			const previousEntry = previousEntries.get(file.path);
+			if (canReusePages && previousEntry && previousEntry.output === output && previousEntry.mtime === file.stat.mtime && previousEntry.size === file.stat.size && !(previousEntry.imageIssues?.length) && await imageDependenciesUnchanged(app, previousEntry.images) && await app.vault.adapter.exists(outputPath)) {
+				entries.push(previousEntry);
+				generated.add(output);
+				pagesUnchanged++;
+				continue;
 			}
-		});
-		const parent = relativeToSource(file.parent?.path ?? '', sourceRoot);
-		const crumbs = parent ? parent.split('/').map((part, i, arr) => {
-			const crumbFolder = arr.slice(0, i + 1).join('/');
-			return `<a href="${escapeHtml(relativeHref(output, folderIndex(crumbFolder)))}">${escapeHtml(part)}</a>`;
-		}).join(' / ') : '';
-		const homeHref = relativeHref(output, 'index.html');
-		const wrapped = `<div class="crumbs"><a href="${escapeHtml(homeHref)}">Overview</a>${crumbs ? ` / ${crumbs}` : ''} / ${escapeHtml(file.basename)}</div><article class="article">${body}</article>`;
-		const html = pageShell(file.basename, wrapped, css, makeNav(files, outputs, output, sourceRoot), homeHref, output);
-		await writeIfChanged(app, outputPath, html);
-		generated.add(outputPath.slice(exportDir.length + 1));
-		entries.push({ path: file.path, mtime: file.stat.mtime, size: file.stat.size, output });
+			const md = await app.vault.read(file);
+			const imageDependencies: ImageDependency[] = [];
+			const noteImageIssues: string[] = [];
+			const images = await collectImages(app, md, file.path, {
+				mode: settings.imageMode,
+				exportDir,
+				assetsFolder: cleanAssetsFolder(settings.assetsFolder),
+				assetPrefix: relativeAssetPrefix(output),
+				onResolved: (_reference, imageFile) => imageDependencies.push(imageFile),
+				onAssetWritten: (_reference, outputPath, changed) => {
+				if (changed) assetsWritten++; else assetsUnchanged++;
+				console.debug(`[md2html] Asset ${changed ? 'written' : 'unchanged'}: ${outputPath}`);
+			},
+				onIssue: (reference, reason) => {
+					const issue = `${reference} (${reason})`;
+					noteImageIssues.push(issue);
+					imageIssues.push(`${file.path}: ${issue}`);
+					console.warn(`[md2html] Image issue in ${file.path}: ${reference} — ${reason}`);
+				}
+			});
+			imagesSeen += images.size;
+			const body = convertMarkdownToHtml(stripFrontmatter(md), {
+				images,
+				resolveWikilink: (target: string) => {
+					const dest = app.metadataCache.getFirstLinkpathDest(target, file.path);
+					if (!dest) return undefined;
+					const destOut = outputs.get(dest.path);
+					if (!destOut) return undefined;
+					return relativeHref(output, destOut);
+				}
+			});
+			const parent = relativeToSource(file.parent?.path ?? '', sourceRoot);
+			const crumbs = parent ? parent.split('/').map((part, i, arr) => {
+				const crumbFolder = arr.slice(0, i + 1).join('/');
+				return `<a href="${escapeHtml(relativeHref(output, folderRoute(crumbFolder)))}">${escapeHtml(part)}</a>`;
+			}).join(' / ') : '';
+			const homeHref = relativeHref(output, folderRoute(''));
+			const wrapped = `<div class="crumbs"><a href="${escapeHtml(homeHref)}">Overview</a>${crumbs ? ` / ${crumbs}` : ''} / ${escapeHtml(file.basename)}</div><article class="article">${body}</article>`;
+			const html = pageShell(file.basename, wrapped, css, makeNav(files, outputs, output, sourceRoot), homeHref, output);
+			const changed = await writeIfChanged(app, outputPath, html);
+			if (changed) pagesWritten++; else pagesUnchanged++;
+			generated.add(outputPath.slice(exportDir.length + 1));
+			entries.push({ path: file.path, mtime: file.stat.mtime, size: file.stat.size, output, images: imageDependencies, imageIssues: noteImageIssues });
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			failedFiles.push(file.path);
+			console.error(`[md2html] Failed to export note ${file.path}: ${reason}`, err);
+			const previousEntry = previousEntries.get(file.path);
+			if (previousEntry) {
+				entries.push(previousEntry);
+				generated.add(previousEntry.output);
+			}
+			notice.setMessage(`Smart Export: failed to process ${file.path} · continuing…`);
+		}
 	}
-
-	for (const sourceFolder of folders) {
-		const output = folderIndex(sourceFolder);
+	const failedFolders: string[] = [];
+	for (const [folderIndexNumber, sourceFolder] of folders.entries()) {
+		const output = folderRoute(sourceFolder);
+		notice.setMessage(`Smart Export: building folder index ${folderIndexNumber + 1}/${folders.length} · ${sourceFolder || '/'}`);
+		try {
+		if (canReusePages && oldGenerated.has(output) && await app.vault.adapter.exists(normalizePath(`${exportDir}/${output}`))) {
+			generated.add(output);
+			pagesUnchanged++;
+			continue;
+		}
 		const directFiles = folderFiles.get(sourceFolder) ?? [];
 		const directChildren = childFolders.get(sourceFolder) ?? [];
 		const cards: string[] = [];
 		for (const child of directChildren) {
-			const childIndex = folderIndex(child);
+			const childIndex = folderRoute(child);
 			cards.push(`<a class="page-card" href="${escapeHtml(relativeHref(output, childIndex))}" data-search="${escapeHtml((titleForFolder(child, sourceRoot) + ' ' + child).toLowerCase())}"><h2>📁 ${escapeHtml(titleForFolder(child, sourceRoot))} ↗</h2><p>${escapeHtml(child)}</p></a>`);
 		}
 		for (const file of directFiles) {
@@ -223,50 +325,93 @@ async function exportFolderWebsiteInner(app: App, folder: TFolder, settings: Exp
 		}
 		const title = titleForFolder(sourceFolder, sourceRoot);
 		const body = `<section class="hero"><p class="eyebrow">EXPORTED FOLDER · ${sourceFolder ? escapeHtml(sourceFolder) : escapeHtml(cleanRelative(sourceRoot) || 'ROOT')}</p><h1>${escapeHtml(title)}</h1><p>A small site of notes from this folder.</p></section><p class="eyebrow">${directFiles.length} NOTES · ${directChildren.length} SUBFOLDERS</p>${cards.length ? `<div class="cards">${cards.join('')}</div>` : '<div class="empty">No notes or subfolders here yet.</div>'}`;
-		const html = pageShell(title, body, css, makeNav(files, outputs, output, sourceRoot), relativeHref(output, 'index.html'), output);
-		await writeIfChanged(app, normalizePath(`${exportDir}/${output}`), html);
+		const html = pageShell(title, body, css, makeNav(files, outputs, output, sourceRoot), relativeHref(output, folderRoute('')), output);
+		const changed = await writeIfChanged(app, normalizePath(`${exportDir}/${output}`), html);
+		if (changed) pagesWritten++; else pagesUnchanged++;
 		generated.add(output);
-	}
-
-	for (const oldPath of oldGenerated) {
-		if (generated.has(oldPath) || oldPath === MANIFEST || !oldPath.toLowerCase().endsWith('.html')) continue;
-		const path = normalizePath(`${exportDir}/${oldPath}`);
-		if (await app.vault.adapter.exists(path)) {
-			try { await app.vault.adapter.remove(path); } catch (err) { console.warn(`md2html: could not remove stale generated page ${path}`, err); }
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			failedFolders.push(sourceFolder || '/');
+			console.error(`[md2html] Failed to write folder index ${output}: ${reason}`, err);
 		}
 	}
-	const manifest: Manifest = { version: 2, sourceFolder: sourceRoot, settingsKey, files: entries, generated: [...generated].filter((path) => path !== MANIFEST).sort() };
-	await writeIfChanged(app, manifestPath, JSON.stringify(manifest, null, 2));
+
+	const hasFailures = failedFiles.length > 0 || failedFolders.length > 0 || imageIssues.length > 0;
+	if (!hasFailures) for (const oldPath of oldGenerated) {
+		if (generated.has(oldPath) || oldPath === MANIFEST || !oldPath.toLowerCase().endsWith('.html')) continue;
+		// The manifest is vault-local data; never trust paths in it to delete outside the export root.
+		if (oldPath.startsWith('/') || oldPath.split(/[\\/]/).includes('..') || cleanRelative(oldPath) !== oldPath) {
+			console.warn(`[md2html] Skipping unsafe stale-output path from manifest: ${oldPath}`);
+			continue;
+		}
+		const path = normalizePath(`${exportDir}/${oldPath}`);
+		if (await app.vault.adapter.exists(path)) {
+			try { await app.vault.adapter.remove(path); console.info(`[md2html] Removed stale generated page: ${path}`); } catch (err) { console.warn(`[md2html] Could not remove stale generated page ${path}`, err); }
+		}
+	}
+	const manifestGenerated = hasFailures ? new Set([...oldGenerated, ...generated]) : generated;
+	const manifest: Manifest = { version: 3, sourceFolder: sourceRoot, settingsKey, files: entries, generated: [...manifestGenerated].filter((path) => path !== MANIFEST).sort(), generatedAt: new Date().toISOString() };
+	try {
+		await writeIfChanged(app, manifestPath, JSON.stringify(manifest, null, 2));
+	} catch (err) {
+		console.error(`[md2html] Failed to write manifest ${manifestPath}`, err);
+		throw new Error(`Pages were exported, but the manifest could not be saved (${manifestPath}).`);
+	}
 	const changedSettings = previous?.settingsKey !== settingsKey;
-	new Notice(`Smart Export complete: ${files.length} notes → ${exportDir}/index.html (open in a browser)${changedSettings ? ' · theme/assets refreshed' : ''}`);
+	const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+	const summary = `Website export ${hasFailures ? 'finished with warnings' : 'complete'}: ${entries.length}/${files.length} notes from "${titleForFolder('', sourceRoot)}" · ${pagesWritten} pages updated · ${pagesUnchanged} unchanged · ${elapsedSeconds}s · ${exportDir}/index.html`;
+	console.info('[md2html] Website export summary', { sourceRoot: sourceRoot || '/', exportDir, notesFound: files.length, notesReported: entries.length, failedNotes: failedFiles, failedFolders, imageIssues, pagesWritten, pagesUnchanged, imagesSeen, assetsWritten, assetsUnchanged, settingsChanged: changedSettings, elapsedSeconds });
+	if (hasFailures) {
+		const details = [...failedFiles.map((path) => `note: ${path}`), ...failedFolders.map((path) => `folder: ${path}`), ...imageIssues.map((item) => `image: ${item}`)];
+		console.warn('[md2html] Recoverable export issues:', details);
+	}
+	notice.setMessage(summary);
+	if (hasFailures) new Notice(`md2html exported with warnings. ${failedFiles.length} note errors, ${failedFolders.length} folder errors, ${imageIssues.length} image issues. See console for paths.`);
 }
 
-async function writeIfChanged(app: App, path: string, content: string): Promise<void> {
+async function writeIfChanged(app: App, path: string, content: string): Promise<boolean> {
 	const slash = path.lastIndexOf('/');
 	if (slash > 0) await ensureFolder(app, path.slice(0, slash));
 	if (await app.vault.adapter.exists(path)) {
-		try { if (await app.vault.adapter.read(path) === content) return; } catch { /* overwrite unreadable generated file */ }
+		try { if (await app.vault.adapter.read(path) === content) return false; } catch (err) { console.warn(`[md2html] Could not compare existing output ${path}; rewriting it.`, err); }
 	}
 	await writeTextFile(app, path, content);
+	return true;
 }
 
 export async function checkFolderSync(app: App, folder: TFolder, settings: ExportSettings): Promise<void> {
 	const exportDir = cleanFolder(settings.exportPath) || 'exports-md2html';
 	const sourceRoot = folder.path === '/' ? '' : folder.path;
+	if (sourceRoot && isInside(sourceRoot, exportDir)) { new Notice('Choose a source folder outside the export folder.'); return; }
 	const manifestPath = normalizePath(`${exportDir}/${MANIFEST}`);
-	if (!(await app.vault.adapter.exists(manifestPath))) { new Notice('No Smart Export manifest found. Run Smart Export first.'); return; }
 	try {
+		if (!(await app.vault.adapter.exists(manifestPath))) { new Notice('No website export found. Run an export first.'); return; }
 		const manifest = JSON.parse(await app.vault.adapter.read(manifestPath)) as Manifest;
 		const current = sourceNotes(app, sourceRoot, exportDir);
+		if (manifest.version !== 3) {
+			new Notice('The export manifest uses an older format. Run a website export once to rebuild it.');
+			return;
+		}
 		if ((manifest.sourceFolder ?? '') !== sourceRoot) {
-			new Notice(`Manifest is for "${manifest.sourceFolder || 'vault root'}", but this command is looking at "${sourceRoot || 'vault root'}". Run Smart Export on this folder.`);
+			new Notice(`The last website export was "${manifest.sourceFolder || 'vault root'}", but this check is for "${sourceRoot || 'vault root'}". Run the matching export command.`);
 			return;
 		}
 		const old = new Map((manifest.files ?? []).map((item) => [item.path, item]));
 		const changed = current.filter((file) => { const entry = old.get(file.path); return !entry || entry.mtime !== file.stat.mtime || entry.size !== file.stat.size; });
-		const removed = (manifest.files ?? []).filter((entry) => !current.some((file) => file.path === entry.path));
+		const currentPaths = new Set(current.map((file) => file.path));
+		const removed = (manifest.files ?? []).filter((entry) => !currentPaths.has(entry.path));
+		const imageChanges: string[] = [];
+		for (const entry of (manifest.files ?? [])) {
+			if (!Array.isArray(entry.images) || !(await imageDependenciesUnchanged(app, entry.images))) imageChanges.push(entry.path);
+		}
+		const missingOutputs: string[] = [];
+		const safeGenerated = Array.isArray(manifest.generated) ? manifest.generated.filter((output): output is string => typeof output === 'string' && !output.startsWith('/') && !output.split(/[\\/]/).includes('..')) : []; 
+		for (const output of safeGenerated) {
+			const outputPath = normalizePath(`${exportDir}/${output}`);
+			if (!(await app.vault.adapter.exists(outputPath))) missingOutputs.push(output);
+		}
 		const settingsChanged = manifest.settingsKey !== makeSettingsKey(settings);
-		if (!changed.length && !removed.length && !settingsChanged) new Notice(`Website is in sync ✓ (${current.length} notes)`);
-		else new Notice(`Website needs sync: ${changed.length} new/changed, ${removed.length} removed${settingsChanged ? ', theme/image settings changed' : ''}. Run Smart Export to refresh.`);
-	} catch (err) { console.error('md2html sync check failed', err); new Notice('Could not read the export manifest. Re-export the folder website.'); }
+		if (!changed.length && !removed.length && !imageChanges.length && !missingOutputs.length && !settingsChanged) new Notice(`Website is in sync ✓ (${current.length} notes from ${sourceRoot || 'vault root'})`);
+		else new Notice(`Website needs sync: ${changed.length} new/changed, ${removed.length} removed, ${imageChanges.length} notes with changed/missing images, ${missingOutputs.length} missing output pages${settingsChanged ? ', theme/image settings changed' : ''}. Run a website export to refresh.`);
+	} catch (err) { const reason = err instanceof Error ? err.message : String(err); console.error(`[md2html] Sync check failed for ${manifestPath}: ${reason}`, err); new Notice(`Could not check Smart Export sync: ${reason}. See console for details.`); }
 }

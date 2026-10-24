@@ -16,20 +16,8 @@ export class ExportSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Export mode')
-			.setDesc('Legacy exports the open note as one HTML page. Smart Export turns the current folder (and subfolders) into a website.')
-			.addDropdown((dropdown) => dropdown
-				.addOption('legacy', 'Legacy — single HTML page')
-				.addOption('smart', 'Smart — folder website')
-				.setValue(this.plugin.settings.exportMode)
-				.onChange(async (value: string) => {
-					this.plugin.settings.exportMode = value === 'smart' ? 'smart' : 'legacy';
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
 			.setName('Export theme')
-			.setDesc('Choose the look of the exported website and HTML pages')
+			.setDesc('Look of exported HTML pages and folder websites')
 			.addDropdown((dropdown) => {
 				for (const name of THEME_NAMES) {
 					dropdown.addOption(name, THEME_LABELS[name]);
@@ -45,7 +33,7 @@ export class ExportSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Export folder')
-			.setDesc(`Vault-relative output root for the mirrored website. Smart Export keeps the vault hierarchy beneath this folder; deploy this folder (default: ${DEFAULT_EXPORT_FOLDER}).`)
+			.setDesc(`Vault folder that receives the HTML website (default: ${DEFAULT_EXPORT_FOLDER}). Open index.html in a browser.`)
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_EXPORT_FOLDER)

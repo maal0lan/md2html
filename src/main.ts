@@ -2,6 +2,7 @@ import { Notice, Plugin, TFolder, normalizePath } from 'obsidian';
 import { ExportSettingTab } from './settings.js';
 import {
 	DEFAULT_EXPORT_FOLDER,
+	DEFAULT_SETTINGS,
 	cleanAssetsFolder,
 	cleanFolder,
 	ensureFolder,
@@ -12,13 +13,20 @@ import {
 } from './utils.js';
 import { buildHtmlDocument } from './markdown.js';
 import { collectImages } from './images.js';
-import { checkFolderSync, exportFolderWebsite } from './smart-export.js';
+import { exportFolderWebsite } from './smart-export.js';
 
 export default class Md2HtmlPlugin extends Plugin {
 	settings!: ExportSettings;
 
 	async onload() {
-		this.settings = await loadExportSettings(this);
+		try {
+			this.settings = await loadExportSettings(this);
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			console.error(`[md2html] Could not load settings; using defaults: ${reason}`, err);
+			this.settings = { ...DEFAULT_SETTINGS };
+			new Notice(`md2html could not load saved settings; defaults are active. ${reason}`);
+		}
 
 		this.addCommand({
 			id: 'convert-md-to-html',
@@ -39,40 +47,23 @@ export default class Md2HtmlPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'export-current-folder-smart',
-			name: 'Smart Export: current folder as website',
+			name: 'Export current folder as website',
 			checkCallback: (checking: boolean) => {
 				const file = this.app.workspace.getActiveFile();
-				if (!file) return false;
-				if (!checking) {
-					const folder = file.parent;
-					if (folder instanceof TFolder) void exportFolderWebsite(this.app, folder, this.settings);
-				}
+				const folder = file?.parent;
+				if (!(folder instanceof TFolder)) return false;
+				if (!checking) void exportFolderWebsite(this.app, folder, this.settings);
 				return true;
 			}
 		});
 
 		this.addCommand({
-			id: 'check-smart-export-sync',
-			name: 'Smart Export: check folder sync status',
-			checkCallback: (checking: boolean) => {
-				const file = this.app.workspace.getActiveFile();
-				if (!file) return false;
-				if (!checking && file.parent instanceof TFolder) void checkFolderSync(this.app, file.parent, this.settings);
-				return true;
-			}
-		});
-
-		this.addCommand({
-			id: 'export-using-selected-mode',
-			name: 'Export current note/folder using selected mode',
-			checkCallback: (checking: boolean) => {
-				const file = this.app.workspace.getActiveFile();
-				if (!file || file.extension !== 'md') return false;
-				if (!checking) {
-					if (this.settings.exportMode === 'smart' && file.parent instanceof TFolder) void exportFolderWebsite(this.app, file.parent, this.settings);
-					else void this.convertActiveFile();
-				}
-				return true;
+			id: 'export-all-folders-as-website',
+			name: 'Export all folders as website',
+			callback: () => {
+				const root = this.app.vault.getRoot();
+				if (root instanceof TFolder) void exportFolderWebsite(this.app, root, this.settings);
+				else new Notice('Could not find the vault root folder.');
 			}
 		});
 
@@ -80,7 +71,13 @@ export default class Md2HtmlPlugin extends Plugin {
 	}
 
 	async saveSettings(): Promise<void> {
-		await saveExportSettings(this, this.settings);
+		try {
+			await saveExportSettings(this, this.settings);
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			console.error(`[md2html] Could not save settings: ${reason}`, err);
+			new Notice(`md2html could not save settings: ${reason}`);
+		}
 	}
 
 	private async convertActiveFile() {
@@ -91,6 +88,10 @@ export default class Md2HtmlPlugin extends Plugin {
 			return;
 		}
 
+		const startedAt = Date.now();
+		const imageIssues: string[] = [];
+		const notice = new Notice(`md2html: exporting ${activeFile.path}…`);
+		console.info(`[md2html] Legacy export started: ${activeFile.path}`);
 		try {
 			const mdContent = await this.app.vault.read(activeFile);
 
@@ -102,7 +103,11 @@ export default class Md2HtmlPlugin extends Plugin {
 			const images = await collectImages(this.app, mdContent, activeFile.path, {
 				mode: this.settings.imageMode,
 				exportDir,
-				assetsFolder: cleanAssetsFolder(this.settings.assetsFolder)
+				assetsFolder: cleanAssetsFolder(this.settings.assetsFolder),
+				onIssue: (reference, reason) => {
+					imageIssues.push(`${reference} (${reason})`);
+					console.warn(`[md2html] Legacy image issue in ${activeFile.path}: ${reference} — ${reason}`);
+				}
 			});
 
 			const htmlOutput = buildHtmlDocument(
@@ -116,10 +121,13 @@ export default class Md2HtmlPlugin extends Plugin {
 			const fileName = `${activeFile.basename.replace(/\s+/g, '-')}.html`;
 			await writeTextFile(this.app, normalizePath(`${exportDir}/${fileName}`), htmlOutput);
 
-			new Notice(`Exported: ${exportDir}/${fileName} — open it in a browser (Obsidian hides .html files)`);
+			const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+			console.info('[md2html] Legacy export complete', { source: activeFile.path, output: `${exportDir}/${fileName}`, imageIssues, elapsedSeconds: elapsed });
+			notice.setMessage(`Exported ${activeFile.basename} → ${exportDir}/${fileName} · ${imageIssues.length} image issues · ${elapsed}s${imageIssues.length ? ' · see console' : ''}`);
 		} catch (err) {
-			console.error('md2html export failed:', err);
-			new Notice('Conversion failed. See console for details.');
+			const reason = err instanceof Error ? err.message : String(err);
+			console.error(`[md2html] Legacy export failed for ${activeFile.path}: ${reason}`, err);
+			notice.setMessage(`Conversion failed for ${activeFile.path}: ${reason}`);
 		}
 	}
 }

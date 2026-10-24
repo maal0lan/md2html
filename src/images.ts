@@ -22,6 +22,12 @@ export interface ImageExportOptions {
 	assetsFolder: string;
 	/** Relative prefix from the current HTML page back to the site root. */
 	assetPrefix?: string;
+	/** Receives image source metadata for dependency-aware incremental exports. */
+	onResolved?: (reference: string, file: { path: string; mtime: number; size: number }) => void;
+	/** Reports whether a copied asset was written or reused unchanged. */
+	onAssetWritten?: (reference: string, outputPath: string, changed: boolean) => void;
+	/** Receives recoverable image issues so Smart Export can include them in its report. */
+	onIssue?: (reference: string, reason: string) => void;
 }
 
 function resolveFile(app: App, ref: string, sourcePath: string): TFile | null {
@@ -68,11 +74,15 @@ export async function collectImages(
 
 	for (const ref of extractImageRefs(md)) {
 		const file = resolveFile(app, ref, sourcePath);
-		if (!file) continue;
+		if (!file) {
+			opts.onIssue?.(ref, 'image reference could not be resolved');
+			continue;
+		}
 
 		const ext = file.extension.toLowerCase();
 		const mime = MIME_TYPES[ext];
 		if (!mime) continue;
+		opts.onResolved?.(ref, { path: file.path, mtime: file.stat.mtime, size: file.stat.size });
 
 		try {
 			const data = await app.vault.readBinary(file);
@@ -87,10 +97,14 @@ export async function collectImages(
 				folderReady = true;
 			}
 			const name = `${slug(file.basename)}-${shortHash(file.path)}.${ext}`;
-			await writeBinaryFile(app, normalizePath(`${assetsDir}/${name}`), data);
+			const assetPath = normalizePath(`${assetsDir}/${name}`);
+			const changed = await writeBinaryFile(app, assetPath, data);
+			opts.onAssetWritten?.(ref, assetPath, changed);
 			images.set(ref, `${opts.assetPrefix ?? ''}${opts.assetsFolder}/${name}`);
 		} catch (err) {
-			console.error(`md2html: could not export image "${ref}"`, err);
+			const reason = err instanceof Error ? err.message : String(err);
+			console.error(`md2html: could not export image "${ref}" from ${file.path}: ${reason}`, err);
+			opts.onIssue?.(ref, `${file.path}: ${reason}`);
 		}
 	}
 

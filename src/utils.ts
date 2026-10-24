@@ -8,7 +8,7 @@ export const DEFAULT_EXPORT_FOLDER = 'exports-md2html';
 export const DEFAULT_ASSETS_FOLDER = 'assets';
 
 export interface ExportSettings {
-	/** Legacy exports one note; smart exports the active folder as a website. */
+	/** Kept for older settings files. Commands now choose single-note vs website export. */
 	exportMode: ExportMode;
 	exportTheme: ThemeName;
 	/** Vault-relative folder that receives the HTML files (the deployable root). */
@@ -30,8 +30,10 @@ export const DEFAULT_SETTINGS: ExportSettings = {
 /** Clean a user-typed vault-relative folder ("./exports/" -> "exports"). Returns '' if unusable. */
 export function cleanFolder(input: string): string {
 	const trimmed = (input || '').trim().replace(/^\.?\/+/, '');
-	if (!trimmed || trimmed.split('/').includes('..')) return '';
-	return normalizePath(trimmed).replace(/^\/+|\/+$/g, '');
+	if (!trimmed) return '';
+	const normalized = normalizePath(trimmed).replace(/^\/+|\/+$/g, '');
+	if (!normalized || normalized.split('/').includes('..')) return '';
+	return normalized;
 }
 
 /** The assets folder is always a single folder name inside the export folder. */
@@ -46,9 +48,15 @@ export async function ensureFolder(app: App, path: string): Promise<void> {
 	for (const part of path.split('/').filter(Boolean)) {
 		current = current ? `${current}/${part}` : part;
 		if (!(await app.vault.adapter.exists(current))) {
-			await app.vault.createFolder(current).catch(() => {
-				// Folder may already exist due to a race; ignore.
-			});
+			try {
+				await app.vault.createFolder(current);
+			} catch (err) {
+				// Ignore a race only if another operation actually created the folder.
+				if (!(await app.vault.adapter.exists(current))) {
+					const reason = err instanceof Error ? err.message : String(err);
+					throw new Error(`Could not create folder "${current}": ${reason}`);
+				}
+			}
 		}
 	}
 }
@@ -65,16 +73,33 @@ export async function writeTextFile(app: App, path: string, content: string): Pr
 	}
 }
 
-/** Write a binary file; skips the write when an identically-sized file is already there. */
-export async function writeBinaryFile(app: App, path: string, data: ArrayBuffer): Promise<void> {
+/** Write binary content only when bytes differ (equal size does not imply equal content). */
+export async function writeBinaryFile(app: App, path: string, data: ArrayBuffer): Promise<boolean> {
 	const existing = app.vault.getAbstractFileByPath(path);
 	if (existing instanceof TFile) {
-		if (existing.stat.size !== data.byteLength) await app.vault.modifyBinary(existing, data);
+		if (existing.stat.size === data.byteLength) {
+			try {
+				const old = new Uint8Array(await app.vault.readBinary(existing));
+				const next = new Uint8Array(data);
+				if (old.length === next.length && old.every((byte, index) => byte === next[index])) return false;
+			} catch (err) {
+				console.warn(`md2html: could not compare existing asset ${path}; rewriting it.`, err);
+			}
+		}
+		await app.vault.modifyBinary(existing, data);
 	} else if (await app.vault.adapter.exists(path)) {
+		try {
+			const old = new Uint8Array(await app.vault.adapter.readBinary(path));
+			const next = new Uint8Array(data);
+			if (old.length === next.length && old.every((byte, index) => byte === next[index])) return false;
+		} catch (err) {
+			console.warn(`md2html: could not compare existing asset ${path}; rewriting it.`, err);
+		}
 		await app.vault.adapter.writeBinary(path, data);
 	} else {
 		await app.vault.createBinary(path, data);
 	}
+	return true;
 }
 
 /**
